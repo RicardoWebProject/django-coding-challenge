@@ -3,11 +3,12 @@
   import {
     activeTab,
     products, productsLoading, productsError, showProductForm, newProduct, editingProduct,
-    orders, ordersLoading, ordersError, showOrderForm, orderItems, orderFormError, expandedOrderId,
+    orders, ordersLoading, ordersError, expandedOrderId,
+    cart, cartError, lastCreatedOrder,
     fetchProducts, createProduct, startEditProduct, saveProduct,
-    fetchOrders, createOrder, cancelOrder, fulfillOrder,
-    addOrderItem, removeOrderItem, toggleOrderDetail, formatDate,
-    setNewProductField, setEditingProductField, setOrderItemField,
+    fetchOrders, cancelOrder, fulfillOrder, toggleOrderDetail, formatDate,
+    addToCart, removeFromCart, setCartItemQuantity, clearCart, submitCart,
+    setNewProductField, setEditingProductField,
   } from '../scripts/baseConnection.js';
 
   onMount(() => {
@@ -130,13 +131,57 @@
                       {p.stock_quantity}
                     </span>
                   </td>
-                  <td>
+                  <td class="btn-row-inline">
                     <button class="btn-sm" on:click={() => startEditProduct(p)}>Editar</button>
+                    <button class="btn-sm btn-success" on:click={() => addToCart(p)}>+ Carrito</button>
                   </td>
                 </tr>
               {/each}
             </tbody>
           </table>
+        </div>
+      {/if}
+
+      <!-- ── Confirmation ──────────────────────────────────────────── -->
+      {#if $lastCreatedOrder}
+        <div class="card success-card">
+          <h3>✅ ¡Pedido confirmado!</h3>
+          <p>Orden <strong>#{$lastCreatedOrder.id}</strong> creada correctamente.</p>
+          <p>Total: <strong>Q{$lastCreatedOrder.items.reduce((s, i) => s + i.quantity * parseFloat(i.unit_price), 0).toFixed(2)}</strong></p>
+          <div class="btn-row">
+            <button on:click={() => $lastCreatedOrder = null}>Nuevo pedido</button>
+            <button class="btn-primary" on:click={() => { $lastCreatedOrder = null; $activeTab = 'orders'; }}>Ver mis órdenes →</button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- ── Cart ──────────────────────────────────────────────────── -->
+      {#if $cart.length > 0}
+        <div class="card cart-card">
+          <h3>🛒 Carrito ({$cart.length} ítem(s))</h3>
+          {#each $cart as item (item.product.id)}
+            <div class="cart-item-row">
+              <span class="cart-name">{item.product.name}</span>
+              <span class="muted small">Q{parseFloat(item.product.price).toFixed(2)} c/u</span>
+              <div class="qty-controls">
+                <button class="btn-sm" on:click={() => setCartItemQuantity(item.product.id, item.quantity - 1)} disabled={item.quantity <= 1}>−</button>
+                <input type="number" min="1" value={item.quantity} on:change={e => setCartItemQuantity(item.product.id, e.target.value)} />
+                <button class="btn-sm" on:click={() => setCartItemQuantity(item.product.id, item.quantity + 1)}>+</button>
+              </div>
+              <span class="cart-subtotal">Q{(parseFloat(item.product.price) * item.quantity).toFixed(2)}</span>
+              <button class="btn-danger btn-sm" on:click={() => removeFromCart(item.product.id)}>✕</button>
+            </div>
+          {/each}
+          <div class="cart-total-row">
+            <strong>Total: Q{$cart.reduce((s, i) => s + parseFloat(i.product.price) * i.quantity, 0).toFixed(2)}</strong>
+          </div>
+          {#if $cartError}
+            <p class="error">{$cartError}</p>
+          {/if}
+          <div class="btn-row">
+            <button on:click={clearCart}>Vaciar carrito</button>
+            <button class="btn-primary" on:click={submitCart}>Realizar pedido</button>
+          </div>
         </div>
       {/if}
     </section>
@@ -149,48 +194,11 @@
         <h2>Órdenes</h2>
         <div class="actions">
           <button on:click={fetchOrders}>↻ Refrescar</button>
-          <button class="btn-primary" on:click={() => { $showOrderForm = !$showOrderForm; $orderFormError = ''; }}>
-            {$showOrderForm ? '✕ Cancelar' : '+ Nueva orden'}
-          </button>
         </div>
       </div>
 
       {#if $ordersError}
         <p class="error">{$ordersError}</p>
-      {/if}
-
-      <!-- New order form -->
-      {#if $showOrderForm}
-        <div class="card form-card">
-          <h3>Nueva orden</h3>
-          {#each $orderItems as item, i (i)}
-            <div class="order-item-row">
-              <label class="flex-label">
-                Producto
-                <select value={item.product_id} on:change={e => setOrderItemField(i, 'product_id', e.target.value)}>
-                  <option value="">— seleccionar —</option>
-                  {#each $products as p (p.id)}
-                    <option value={p.id}>{p.name} (stock: {p.stock_quantity})</option>
-                  {/each}
-                </select>
-              </label>
-              <label class="qty-label">
-                Cantidad
-                <input type="number" min="1" value={item.quantity} on:input={e => setOrderItemField(i, 'quantity', e.target.value)} />
-              </label>
-              {#if $orderItems.length > 1}
-                <button class="btn-danger btn-sm remove-btn" on:click={() => removeOrderItem(i)}>✕</button>
-              {/if}
-            </div>
-          {/each}
-          <div class="btn-row">
-            <button on:click={addOrderItem}>+ Agregar producto</button>
-            <button class="btn-primary" on:click={createOrder}>Confirmar orden</button>
-          </div>
-          {#if $orderFormError}
-            <p class="error">{$orderFormError}</p>
-          {/if}
-        </div>
       {/if}
 
       {#if $ordersLoading}
