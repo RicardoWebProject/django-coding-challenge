@@ -351,3 +351,62 @@ tbody tr:hover {
 
 .stock     { font-weight: 600; color: #27ae60; }
 .stock.low { color: #e74c3c; }
+
+/* ── Cart ── */
+.cart-card h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+.cart-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.cart-name {
+  flex: 1 1 160px;
+  font-weight: 600;
+}
+
+.qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.qty-controls input {
+  width: 52px;
+  text-align: center;
+  padding: 0.25em;
+  margin: 0;
+}
+
+.cart-subtotal {
+  min-width: 70px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.cart-total-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 0 0;
+  font-size: 1.05rem;
+  border-top: 2px solid #e0e0e0;
+  margin-top: 0.5rem;
+}
+
+/* ── Success card ── */
+.success-card {
+  border-left: 4px solid #27ae60;
+  background: #f0faf4;
+}
+
+.success-card h3 {
+  margin: 0 0 0.5rem;
+  color: #1a7a40;
+}
