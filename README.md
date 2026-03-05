@@ -107,3 +107,26 @@ We evaluate submissions on five dimensions:
 | **Trade-off thinking** | Is the Decisions & Trade-offs section specific to *your* implementation? Can you explain why, not just what? |
 
 Good luck.
+
+## Decisions & Trade-offs
+
+### 1. Entorno local con virtualenv en lugar de Docker
+
+Se optó por levantar el proyecto directamente sobre un virtualenv local (Python 3.10) en lugar de utilizar Docker Compose desde el inicio. Si bien el proyecto ya incluye un `docker-compose.yml` funcional, configurarlo correctamente —variables de entorno, volúmenes, red interna, build de la imagen de Node— habría añadido fricción al inicio del desarrollo y dificultado la iteración rápida. La alternativa de Docker sigue siendo válida y está lista para producción o para un equipo que trabaje en distintos sistemas operativos; simplemente se priorizó tener la estructura base funcional primero, con el entendimiento de que la contenedorización es un paso posterior de despliegue, no un prerequisito de desarrollo.
+
+### 2. Lógica de negocio en los serializadores, no en las vistas
+
+Toda la lógica de validación y escritura de órdenes —verificación de stock, bloqueo de precio, deducción de inventario— vive en `OrderCreateSerializer.create()`, no en la vista. Las vistas (`views.py`) se limitan a orquestar el ciclo request-response: deserializar la entrada, delegar al serializador y devolver la respuesta apropiada. La alternativa habría sido concentrar esa lógica directamente en el método `create()` o `perform_create()` de la vista, lo cual es un patrón habitual en proyectos pequeños de DRF. Se eligió el serializador porque encapsula mejor la lógica reutilizable (el mismo serializador podría invocarse desde una tarea asíncrona o un comando de gestión), y porque mantiene las vistas delgadas y fáciles de leer.
+
+### 3. Agregar lo necesario, sin sobre-diseñar
+
+Se identificó que el flujo de negocio requería inevitablemente un punto de transición de `pending` a `fulfilled`, aunque el enunciado no lo mencionara explícitamente: sin él, una orden nunca avanza y la cancelación pierde sentido. Por eso se añadió el endpoint `POST /api/orders/<pk>/fulfill/`. Sin embargo, se decidió no implementar autenticación ni gestión de usuarios: habría implicado introducir modelos de sesión, tokens JWT o sesiones de Django, permisos por objeto, y pruebas adicionales, por un beneficio que no era central al desafío planteado. Es una funcionalidad que se consideraría en un release posterior, una vez validado el flujo principal.
+
+### 4. Separación de responsabilidades en el frontend
+
+Aunque la aplicación es modesta en tamaño y podría haberse escrito en un único archivo `.svelte`, se optó desde el principio por separar en tres capas: `scripts/baseConnection.js` concentra todo el estado (Svelte writable stores) y las llamadas a la API; `src/App.svelte` actúa como capa de presentación pura, consumiendo stores y funciones sin contener lógica propia; y `public/global.css` centraliza los estilos. Esta estructura facilita que cualquier desarrollador que se incorpore al proyecto localice rápidamente dónde vive cada responsabilidad, y hace que las funciones de la API sean independientes del framework de UI —podrían extraerse a un módulo TypeScript sin modificar la plantilla.
+
+### 5. Bloqueo pesimista con orden determinista para prevenir condiciones de carrera
+
+El requisito de que dos órdenes simultáneas no puedan sobrepasar el stock disponible se resolvió mediante `SELECT FOR UPDATE` dentro de una transacción atómica en el serializador. El detalle clave es que los productos se bloquean **siempre en orden ascendente por `pk`**, independientemente del orden en que lleguen en el payload. Esto elimina la posibilidad de un deadlock circular: si dos transacciones concurrentes intentan bloquear los productos A y B, ambas los adquirirán en el mismo orden y una simplemente esperará a que la otra libere el lock, en lugar de bloquearse mutuamente. La alternativa habría sido un bloqueo optimista con reintentos (usando un campo `version` o chequeando el stock antes y después sin lock), pero esa estrategia traslada la gestión de reintentos al cliente y complica el manejo de errores. El bloqueo pesimista es más simple de razonar y correcto por construcción.
+
