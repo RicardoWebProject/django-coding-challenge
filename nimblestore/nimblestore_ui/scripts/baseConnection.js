@@ -14,13 +14,15 @@ export const newProduct      = writable({ name: '', price: '', stock_quantity: '
 export const editingProduct  = writable(null);
 
 // ── Orders state ──────────────────────────────────────────────────────
-export const orders         = writable([]);
-export const ordersLoading  = writable(false);
-export const ordersError    = writable('');
-export const showOrderForm  = writable(false);
-export const orderItems     = writable([{ product_id: '', quantity: 1 }]);
-export const orderFormError = writable('');
+export const orders          = writable([]);
+export const ordersLoading   = writable(false);
+export const ordersError     = writable('');
 export const expandedOrderId = writable(null);
+
+// ── Cart state ────────────────────────────────────────────────────────
+export const cart             = writable([]);
+export const cartError        = writable('');
+export const lastCreatedOrder = writable(null);
 
 // ── Nested-field helpers (stores don't support bind on properties) ────
 export function setNewProductField(field, value) {
@@ -29,14 +31,6 @@ export function setNewProductField(field, value) {
 
 export function setEditingProductField(field, value) {
   editingProduct.update(p => ({ ...p, [field]: value }));
-}
-
-export function setOrderItemField(index, field, value) {
-  orderItems.update(items => {
-    const copy = [...items];
-    copy[index] = { ...copy[index], [field]: value };
-    return copy;
-  });
 }
 
 // ── Products API ──────────────────────────────────────────────────────
@@ -119,11 +113,40 @@ export async function fetchOrders() {
   }
 }
 
-export async function createOrder() {
-  orderFormError.set('');
-  const items = get(orderItems).filter(i => i.product_id !== '' && i.quantity > 0);
+export function addToCart(product) {
+  cart.update(items => {
+    const idx = items.findIndex(i => i.product.id === product.id);
+    if (idx >= 0) {
+      const copy = [...items];
+      copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
+      return copy;
+    }
+    return [...items, { product, quantity: 1 }];
+  });
+}
+
+export function removeFromCart(productId) {
+  cart.update(items => items.filter(i => i.product.id !== productId));
+}
+
+export function setCartItemQuantity(productId, qty) {
+  const n = parseInt(qty);
+  if (isNaN(n) || n < 1) return;
+  cart.update(items =>
+    items.map(i => i.product.id === productId ? { ...i, quantity: n } : i)
+  );
+}
+
+export function clearCart() {
+  cart.set([]);
+  cartError.set('');
+}
+
+export async function submitCart() {
+  cartError.set('');
+  const items = get(cart);
   if (!items.length) {
-    orderFormError.set('Agrega al menos un producto.');
+    cartError.set('El carrito está vacío.');
     return;
   }
   try {
@@ -132,8 +155,8 @@ export async function createOrder() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         items: items.map(i => ({
-          product: parseInt(i.product_id),
-          quantity: parseInt(i.quantity),
+          product: i.product.id,
+          quantity: i.quantity,
         })),
       }),
     });
@@ -141,11 +164,12 @@ export async function createOrder() {
       const data = await res.json();
       throw new Error(JSON.stringify(data));
     }
-    orderItems.set([{ product_id: '', quantity: 1 }]);
-    showOrderForm.set(false);
+    const order = await res.json();
+    lastCreatedOrder.set(order);
+    cart.set([]);
     await fetchOrders();
   } catch (e) {
-    orderFormError.set(e.message);
+    cartError.set(e.message);
   }
 }
 
@@ -175,14 +199,6 @@ export async function fulfillOrder(id) {
   } catch (e) {
     ordersError.set(e.message);
   }
-}
-
-export function addOrderItem() {
-  orderItems.update(items => [...items, { product_id: '', quantity: 1 }]);
-}
-
-export function removeOrderItem(i) {
-  orderItems.update(items => items.filter((_, idx) => idx !== i));
 }
 
 export function toggleOrderDetail(id) {
